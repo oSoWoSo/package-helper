@@ -21,6 +21,13 @@ succesful_builds=()
 # The supplied package name.
 pkg_name=$1
 
+# Logging enabled?
+log_build=false
+
+# Number of CPU cores: this is used to enable parallel building for a
+# package.
+num_cores=$(lscpu --all --parse=CORE,SOCKET | grep -Ev "^#" | sort -u | wc -l)
+
 if [[ $pkg_name == "" ]]; then
   echo "[HELPER] Supply a package name."
   exit -1
@@ -31,11 +38,17 @@ fi
 # effectively be available to everybody and every arch.
 for i in $architectures; do
   echo "[HELPER] Compiling for $i..."
-  ./xbps-src pkg -a $i $pkg_name
-  if [[ ! $(echo $?) -eq 0 ]]; then
-    failed_builds+=($i)
+
+  if [[ "$log_build" = true ]]; then
+    ./xbps-src pkg -j $num_cores -a $i $pkg_name 2>&1 >$pkg_name-$i.log
   else
+    ./xbps-src pkg -j $num_cores -a $i $pkg_name
+  fi
+
+  if [[ $(echo $?) -eq 0 ]]; then
     succesful_builds+=($i)
+  else
+    failed_builds+=($i)
   fi
 done
 
@@ -45,11 +58,11 @@ if [[ ${#failed_builds[*]} -eq 0 ]]; then
   echo "[HELPER] No failed builds! Congratulations :)"
 else
   echo "[HELPER] Succesful builds:"
-  for i in $succesful_builds; do
+  for i in ${succesful_builds[@]}; do
     echo "         $i"
   done
   echo "[HELPER] Failed builds:"
-  for i in $failed_builds; do
+  for i in ${failed_builds[@]}; do
     echo "         $i"
   done
 fi
